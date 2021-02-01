@@ -191,7 +191,7 @@ def show_gui():
     tk.Label(window, text='请输入Excel下载地址: ').place(x=50, y=20)
 
     var_usr_name = tk.StringVar()
-    var_usr_name.set('example@python.com')
+    var_usr_name.set('www.yezi.com')
     entry_usr_name = tk.Entry(window, textvariable=var_usr_name, fg="red")
     entry_usr_name.place(x=180, y=20, width=300, height=20)
 

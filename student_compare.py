@@ -25,7 +25,8 @@ import tkinter as tk
 import tkinter.messagebox  # 这个是消息框，对话框的关键
 from requests_html import HTMLSession
 
-excel_name = "student__down_1521.xlsx"
+location_excel_name = "student__location_1521.xlsx"
+question_excel_name = "student__question_2522.xlsx"
 
 
 # 爬取中高风险地区列表
@@ -57,10 +58,8 @@ def get_dangerous_area():
 
 
 # 下载excel
-def down_excel(url):
-    print("下载的excel的url-> {}".format(url))
-    del_old_excel()
-    global excel_name
+def down_excel(url, excel_name):
+    print("下载的excel-> 名称：{}，url：{}".format(excel_name, url))
     try:
         urlretrieve(url, excel_name)
         line = ""
@@ -82,19 +81,22 @@ def down_excel(url):
 
 #  读取Excel列表并进行对比
 def analyse_student():
-    global excel_name
+    global location_excel_name
     dangerous_areas = get_dangerous_area()
 
-    student_excel = xlrd.open_workbook(excel_name)
-    sign_sheet = student_excel.sheet_by_name("已签到")
+    location_excel = xlrd.open_workbook(location_excel_name)
+    sign_sheet = location_excel.sheet_by_name("已签到")
+    oversea_row_list = get_question_excel_oversea()
+
     high_list = [['高风险地区']]
     mid_list = [['中风险地区']]
     extra_list = [['港澳地区']]
+    oversea_list = [['境外人员']]
 
     for i in range(sign_sheet.nrows):
         row = sign_sheet.row_values(i)
-        area_arr = sign_sheet.cell_value(i, 10), sign_sheet.cell_value(i, 11), sign_sheet.cell_value(i, 12)
-        area_arr = [area for area in area_arr if area.strip() != '']
+        area_arr_init = sign_sheet.cell_value(i, 10), sign_sheet.cell_value(i, 11), sign_sheet.cell_value(i, 12)
+        area_arr = [area for area in area_arr_init if area.strip() != '']
 
         # 判断该学生所在地区是否包含在高危险地区内
         if is_dangerous(dangerous_areas[0], area_arr):
@@ -107,12 +109,18 @@ def analyse_student():
         if is_extra_area(area_arr):
             print("港澳风险地区：-> {}".format(row))
             extra_list.append(row)
+        if is_oversea(row, oversea_row_list):
+            print("境外风险地区：-> {}".format(row))
+            oversea_list.append(row)
+            is_oversea(row, oversea_row_list)
+
     result_excel = xlwt.Workbook()
     sheet = result_excel.add_sheet("汇总")
     rowNum = write_excel(sheet, [sign_sheet.row_values(0)])
     rowNum = write_excel(sheet, high_list, rowNum)
     rowNum = write_excel(sheet, mid_list, rowNum + 2)
     rowNum = write_excel(sheet, extra_list, rowNum + 2)
+    rowNum = write_excel(sheet, oversea_list, rowNum + 2)
     file_name = "{}.xls".format(get_excel_time())
     try:
         result_excel.save(file_name)
@@ -146,9 +154,31 @@ def is_extra_area(area_arr):
     return False
 
 
+# 获取问卷表国外人员
+def get_question_excel_oversea():
+    question_excel = xlrd.open_workbook(question_excel_name)
+    question_sheet = question_excel.sheet_by_name("问卷结果")
+    oversea_list = []
+    for i in range(question_sheet.nrows):
+        row = question_sheet.row_values(i)
+        if row[5] == "境外（含港澳台）":
+            oversea_list.append(row)
+            print("问卷表境外人员：-> {}".format(row))
+    return oversea_list
+
+
+# 判断是否为境外地区
+def is_oversea(location_row, oversea_row_list):
+    if location_row[10] == '' and location_row[11] == '' and location_row[12] == '':
+        for oversea_row in oversea_row_list:
+            if oversea_row[4] == location_row[4]:
+                return True
+    return False
+
+
 # 获取统计表生成的时间
 def get_excel_time():
-    student_excel = xlrd.open_workbook(excel_name)
+    student_excel = xlrd.open_workbook(location_excel_name)
     one_sheet = student_excel.sheet_by_name("综合")
     # return "{}".format(one_sheet.cell_value(1, 0)).split(" ")[0]
     return "{}({})".format(one_sheet.cell_value(0, 0), one_sheet.cell_value(1, 0).split(" ")[0])
@@ -176,47 +206,67 @@ def get_url():
         traceback.format_exc()
         print("读取url文件失败")
 
+
 # 删除旧excel
 def del_old_excel():
-    if os.path.exists(excel_name):
-        os.remove(excel_name)
+    if os.path.exists(location_excel_name):
+        os.remove(location_excel_name)
+    if os.path.exists(question_excel_name):
+        os.remove(question_excel_name)
+
 
 def show_gui():
     window = tk.Tk()
     w, h = window.winfo_screenwidth(), window.winfo_screenheight()
     window.title('统计学生疫情地区信息')
-    window.geometry('500x100+{}+{}'.format(int((w - 500) / 2), int((h - 100) / 2)))
+    window.geometry('560x150+{}+{}'.format(int((w - 500) / 2), int((h - 100) / 2)))
 
     # user information
-    tk.Label(window, text='请输入Excel下载地址: ').place(x=50, y=20)
+    tk.Label(window, text='请输入定位Excel下载地址: ').place(x=50, y=20)
+    tk.Label(window, text='请输入问卷Excel下载地址: ').place(x=50, y=60)
 
     var_usr_name = tk.StringVar()
-    var_usr_name.set('www.yezi.com')
+    var_usr_name.set('www.location_excel.com')
     entry_usr_name = tk.Entry(window, textvariable=var_usr_name, fg="red")
-    entry_usr_name.place(x=180, y=20, width=300, height=20)
+    entry_usr_name.place(x=200, y=20, width=300, height=20)
+    question_excel = tk.StringVar()
+    question_excel.set('www.question_excel.com')
+    entry_question_name = tk.Entry(window, textvariable=question_excel, fg="red")
+    entry_question_name.place(x=200, y=60, width=300, height=20)
 
     def exec():
         print(datetime.now())
-        excel_url = var_usr_name.get()
+        loction_excel_url = var_usr_name.get()
+        question_excel_url = question_excel.get()
         retult = False
 
         try:
-            down_excel(excel_url)
+            del_old_excel()
+            down_excel(loction_excel_url, location_excel_name)
+            down_excel(question_excel_url, question_excel_name)
             retult = analyse_student()
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             tk.messagebox.showerror('Error', '下载excel文件失败，请输入正确未失效的Excel链接')
         if retult:
             tk.messagebox.showinfo(title='结果提示', message='Success! ')
         del_old_excel()
 
+
     # login and sign up button
     btn_login = tk.Button(window, text=' 确定 ', command=exec)
-    btn_login.place(x=200, y=60)
+    btn_login.place(x=250, y=100)
 
     window.mainloop()
+
 
 if __name__ == '__main__':
     log_file = open('log.txt', 'w')
     sys.stdout = log_file
     print(datetime.now())
     show_gui()
+
+# if __name__ == '__main__':
+#     a = get_question_excel_oversea()
+#     print(a)
